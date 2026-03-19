@@ -1,0 +1,86 @@
+---
+description: Cadence smart contract security and code quality rules for AI-assisted development
+globs: ["**/*.cdc"]
+alwaysApply: false
+---
+
+# Cadence Guard — Security & Code Quality Rules
+
+When reviewing or generating Cadence smart contracts, apply these rules.
+
+## Security Rules (MUST follow)
+
+### Access Control
+- Default to `access(self)` or `access(contract)` for all declarations
+- Use entitlements (`access(Withdraw)`, `access(Admin)`) for privileged operations
+- NEVER use `access(all)` on: withdraw, deposit, burn, mint, transfer, destroy, admin, set, update, remove
+- Interface restriction (`&{Interface}`) is NOT a security boundary in Cadence 1.0 — use entitlements
+- Published capabilities must use concrete types with specific entitlements
+
+### Resource Safety
+- Resources must be explicitly moved (`<-`) or destroyed — never copied or silently lost
+- Trace every `create` to its `destroy` or `move`
+- `destroy` callbacks must not call external contracts
+- Force-unwrap move (`<-!`) on nil destroys the resource — verify nil is impossible
+
+### Token / Vault Operations
+- `deposit()` must verify incoming vault type matches expected type
+- `withdraw()` must have pre-condition: `self.balance >= amount`
+- Destroying a vault must handle nonzero balance (zero first, or pre-condition)
+- `mint` functions must update `totalSupply` and be access-controlled
+- Always multiply before dividing to preserve UFix64 precision (unless overflow risk)
+
+### Storage
+- No user-controlled string interpolation in storage paths
+- All `borrow<>` results must be nil-checked (`?? panic` or `if let`)
+- Prefer `borrow` over `load`/`save` for in-place mutations
+- Storage references are like symbolic links — the target can be swapped (TOCTOU risk)
+
+### Input Validation
+- All transaction parameters must have `pre {}` conditions
+- Validate string/array lengths to prevent DoS
+- Use `if let value = opt { ... }` instead of `if opt != nil { let value = opt! ... }`
+- Verify no unbounded loops over user-growable collections
+
+### Randomness
+- `revertibleRandom()` requires commit-reveal with at least 1 block separation
+- Seeds must not be derived from block height/timestamp alone
+
+## Code Quality Rules (SHOULD follow)
+
+### Access Modifiers
+- Non-mutating functions should be marked `view`
+- Fields that don't need external access should use `access(self)`
+- Use `let` instead of `var` when the value doesn't change
+
+### Naming & Documentation
+- Use descriptive names (see https://cadence-lang.org/docs/design-patterns#use-descriptive-names-for-fields-paths-functions-and-variables)
+- Plural names for arrays and dictionaries
+- Use named constants instead of magic numbers (use built-in constants like `UInt128.max` when possible)
+- Comment the "why", not the "what"
+- Add argument labels to functions with many parameters
+
+### Patterns
+- Follow Checks-Effects-Interactions pattern
+- Use pre-conditions for input validation, post-conditions for result verification
+- Use ternary expressions to simplify simple branching logic
+- Expressions in logical/comparison operators should be side-effect-free
+- No debug code, TODOs, or commented-out logic in critical paths
+
+### Resilience
+- Critical contract functionality should have an admin-controlled pause mechanism
+- Errors in one user's operation should not block other users (no error-induced DoS)
+
+## DeFi-Specific Rules (when applicable)
+
+- Don't mix internal accounting with actual vault balances
+- Don't use AMM spot price as an oracle — use TWAP or off-chain oracle
+- Validate oracle data with bounds and staleness checks
+- Don't make arbitrary external calls from token-approval-target contracts
+
+## References
+
+- Cadence Security Best Practices: https://cadence-lang.org/docs/security-best-practices
+- Cadence Design Patterns: https://cadence-lang.org/docs/design-patterns
+- Cadence Anti-Patterns: https://cadence-lang.org/docs/anti-patterns
+- Flow CLI Linter: https://developers.flow.com/build/tools/flow-cli/lint
