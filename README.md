@@ -8,22 +8,34 @@ Community-driven security and code quality framework for [Cadence](https://caden
 
 ---
 
+## 60-Second Quick Start
+
+```bash
+# Clone
+git clone https://github.com/LibruaryNFT/cadence-guard.git
+cd cadence-guard
+
+# Scan your contracts (requires Go)
+go run scanner/cadence_audit.go /path/to/your/contracts/
+
+# Try it on the included examples
+go run scanner/cadence_audit.go ./examples/
+```
+
+That's it. The scanner outputs findings sorted by severity. See [How to Use](#how-to-use) below for AI integration, MCP setup, and more.
+
+---
+
 ## What's Inside
 
-### 1. Static Scanner — `scanner/cadence_audit.go`
-A Go-based pattern scanner that catches common security anti-patterns in `.cdc` files. 21 rules across 8 categories. Runs in seconds, outputs text or JSON, returns exit code 1 on high/critical findings (CI-friendly).
-
-### 2. Security Checklist — `checklist/security-checklist.md`
-A 10-section, 50+ item manual audit walkthrough. Covers everything the scanner can't catch: logic bugs, architectural issues, DeFi-specific risks, and cross-VM concerns.
-
-### 3. AI Rules — `rules/`
-Structured rule files for AI-assisted development and review. Same content, multiple formats:
-- **`CLAUDE.md`** — for [Claude Code](https://claude.ai) (auto-loaded from repo root)
-- **`rules/cadence-guard.mdc`** — for [Cursor](https://cursor.sh) IDE
-- **`rules/cadence-guard-rules.md`** — for any LLM (copy/paste into ChatGPT, Gemini, etc.)
-
-### 4. Finding Templates — `templates/`
-Standardized templates for documenting audit findings with severity, root cause, impact, PoC, and fix recommendation.
+| Component | Path | Description |
+|-----------|------|-------------|
+| **Static Scanner** | `scanner/cadence_audit.go` | 21-rule Go scanner, catches security anti-patterns in `.cdc` files |
+| **Security Checklist** | `checklist/security-checklist.md` | 10-section, 50+ item manual audit walkthrough |
+| **AI Rules** | `rules/` | Security & code quality rules for Claude Code, Cursor, and any LLM |
+| **MCP Server** | `mcp/server.py` | Model Context Protocol server — lets AI tools run the scanner directly |
+| **Finding Template** | `templates/finding-template.md` | Standardized format for documenting audit findings |
+| **Examples** | `examples/` | Vulnerable + remediated contracts showing what the scanner catches |
 
 ---
 
@@ -57,37 +69,148 @@ Standardized templates for documenting audit findings with severity, root cause,
 
 ---
 
-## Quick Start
+## How to Use
 
-### Run the Scanner
+There are several ways to use Cadence Guard depending on your workflow. Pick what fits you best — they all work independently.
+
+### Option 1: Run the Scanner Directly
+
+**Requirements:** [Go](https://go.dev/dl/) installed.
 
 ```bash
-# Scan contracts, show all findings
-go run scanner/cadence_audit.go ./contracts/
+# Clone the repo
+git clone https://github.com/LibruaryNFT/cadence-guard.git
+cd cadence-guard
 
-# Only high and critical findings
-go run scanner/cadence_audit.go --severity high ./contracts/
+# Scan your contracts (replace path with your contracts directory)
+go run scanner/cadence_audit.go /path/to/your/contracts/
 
-# JSON output (for CI or tooling)
-go run scanner/cadence_audit.go --json ./contracts/
+# Only show high and critical severity
+go run scanner/cadence_audit.go --severity high /path/to/your/contracts/
+
+# JSON output (for CI pipelines or tooling)
+go run scanner/cadence_audit.go --json /path/to/your/contracts/
 ```
 
-**Exit codes:** `0` = no high/critical findings, `1` = high or critical findings detected.
+**Exit codes:** `0` = no high/critical findings, `1` = high or critical findings. Use this in CI to block merges on security issues.
 
-### Use with AI Tools
+**Example CI step (GitHub Actions):**
+```yaml
+- name: Cadence Guard Security Scan
+  run: go run scanner/cadence_audit.go --severity high --json ./contracts/
+```
 
-**Claude Code:** Clone this repo into your project or add it as context. The `CLAUDE.md` at the root is automatically loaded.
+---
 
-**Cursor:** Copy `rules/cadence-guard.mdc` into your project root. Cursor auto-detects `.mdc` rule files.
+### Option 2: Use with Claude Code
 
-**Any other LLM:** Copy the contents of `rules/cadence-guard-rules.md` into your system prompt or conversation context, then ask it to review your contracts.
+[Claude Code](https://docs.anthropic.com/en/docs/claude-code) automatically loads `CLAUDE.md` from any repo root.
 
-### Run a Manual Audit
+**Method A — Clone into your project (recommended):**
+```bash
+# From your Cadence project root
+git clone https://github.com/LibruaryNFT/cadence-guard.git .cadence-guard
 
-1. Run the scanner first for automated catches
-2. Open `checklist/security-checklist.md`
-3. Work through each section against your contracts
+# Claude Code will see .cadence-guard/CLAUDE.md when you reference it
+# Ask Claude: "Review my contracts using the cadence-guard checklist"
+```
+
+**Method B — Add as MCP server (gives Claude the scanner as a tool):**
+
+Add this to your Claude Code MCP settings (`~/.claude/settings.json` or project `.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "cadence-guard": {
+      "command": "python",
+      "args": ["<path-to-cadence-guard>/mcp/server.py"]
+    }
+  }
+}
+```
+
+Then Claude Code can directly run the scanner, retrieve the checklist, and explain rules — all within your conversation. The MCP server runs locally on your machine, no hosting needed.
+
+**Available MCP tools:**
+| Tool | What It Does |
+|------|-------------|
+| `scan_contracts` | Run the static scanner on a directory, returns JSON findings |
+| `get_checklist` | Get the full 50+ item security checklist |
+| `get_rules` | Get all security and code quality rules |
+| `get_finding_template` | Get the finding documentation template |
+| `explain_rule` | Explain what a specific rule (e.g., ACC-001) checks and how to fix it |
+
+---
+
+### Option 3: Use with Cursor
+
+Copy the rules file into your project:
+```bash
+cp cadence-guard/rules/cadence-guard.mdc /path/to/your/project/
+```
+
+Cursor auto-detects `.mdc` files and applies the rules when generating or reviewing Cadence code. The rules cover both security and code quality.
+
+You can also add the MCP server to Cursor's MCP settings for scanner access.
+
+---
+
+### Option 4: Use with Any LLM (ChatGPT, Gemini, etc.)
+
+1. Open `rules/cadence-guard-rules.md`
+2. Copy the entire contents
+3. Paste it into your LLM conversation as context (system prompt or first message)
+4. Ask it to review your Cadence contracts
+
+Example prompt:
+> "Using the Cadence Guard rules I provided, review this contract for security issues and code quality: [paste contract]"
+
+---
+
+### Option 5: Manual Audit (No AI)
+
+The checklist works standalone — no AI tools needed:
+
+1. Run the scanner: `go run scanner/cadence_audit.go ./contracts/`
+2. Open `checklist/security-checklist.md` in any text editor
+3. Work through each section, checking items off as you go
 4. Document findings using `templates/finding-template.md`
+
+---
+
+### MCP Server Details
+
+The MCP (Model Context Protocol) server lets AI tools use Cadence Guard as a tool rather than just context. It runs **locally on your machine** as a subprocess — no cloud hosting, no API keys, no external services.
+
+**Requirements:** Python 3.10+ and the `mcp` package.
+
+```bash
+# Install the MCP dependency
+pip install mcp
+
+# Test that it works (should start and wait for stdio input)
+python mcp/server.py
+```
+
+**How MCP works:** When you configure an AI tool (Claude Code, Cursor, etc.) to use the MCP server, the tool spawns `python mcp/server.py` as a local subprocess. The AI communicates with it over stdio. The server exposes the scanner and checklist as callable tools. Everything runs on your machine.
+
+**Configure for Claude Code:**
+```json
+{
+  "mcpServers": {
+    "cadence-guard": {
+      "command": "python",
+      "args": ["/absolute/path/to/cadence-guard/mcp/server.py"]
+    }
+  }
+}
+```
+
+**Configure for Cursor:**
+Add to Cursor's MCP settings (Settings → MCP Servers):
+- Name: `cadence-guard`
+- Command: `python /absolute/path/to/cadence-guard/mcp/server.py`
 
 ---
 
@@ -107,6 +230,14 @@ cadence-guard/
 │
 ├── checklist/
 │   └── security-checklist.md          ← Manual audit checklist (10 sections, 50+ items)
+│
+├── mcp/
+│   ├── server.py                      ← MCP server (local, no hosting needed)
+│   └── requirements.txt               ← Python dependencies (just: mcp)
+│
+├── examples/
+│   ├── vulnerable.cdc                 ← Example contract with security issues
+│   └── remediated.cdc                 ← Same contract with all issues fixed
 │
 ├── templates/
 │   └── finding-template.md            ← Finding documentation template
